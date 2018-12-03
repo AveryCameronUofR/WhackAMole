@@ -1,4 +1,3 @@
-
 ;;; Directives
             PRESERVE8
             THUMB       		 
@@ -9,16 +8,17 @@ INITIAL_MSP	EQU		0x20001000	; Initial Main Stack Pointer Value
 
 ;The onboard LEDS are on port C bits 8 and 9
 ;PORT C GPIO - Base Addr: 0x40011000
-GPIOC_CRL	EQU		0x40011000	; (0x00) Port Configuration Register for Px7 -> Px0
-GPIOA_CRL	EQU		0x40010800	; (0x00) Port Configuration Register for Px7 -> Px0
-GPIOB_CRL	EQU		0x40010C00
+
+GPIOA_CRL	EQU		0x40010800	; (0x00) Port Configuration Register for PA7 -> PA0
+GPIOB_CRL	EQU		0x40010C00	; (0x00) Port Configuration Register For PB7 -> PB0
+GPIOC_CRL	EQU		0x40011000	; (0x00) Port Configuration Register for PC7 -> PC0
 RCC_APB2ENR	EQU		0x40021018	; APB2 Peripheral Clock Enable Register
 
 
 ; Times for delay routines
-        
-DELAYTIME	EQU	150000	;'1600000		; (200 ms/24MHz PLL)
+DELAYTIME	EQU	150000
 
+; Constants for Random Number Generation
 AConstant 	EQU 	1664525
 CConstant	EQU 	1013904223
 MConstant	EQU 	0xFFFFFFFF
@@ -119,7 +119,6 @@ winDelayInner
 ;Constantly loops checking which buttons are pressed and activating the corressponding LED
 	ALIGN
 mainLoop PROC
-		
 		BL waitForUser
 		BL PrelimWait
 		ENDP
@@ -332,6 +331,8 @@ continueLED
 	ENDP
 
 checkLED PROC
+	push {LR}
+	
 	LDR R6, =GPIOA_CRL
 	ADD R6, R6, #0x0C
 	LDR R6, [R6]
@@ -349,7 +350,6 @@ checkLED PROC
 	
 	CMP R6, #0x7
 	BEQ checkBtn4
-	
 	B gameEnd
 checkBtn1
 	CMP R5, #0xE
@@ -373,6 +373,8 @@ checkBtn4
 
 validLed
 	ADD R12, R12, #1
+	
+	pop {LR}
 	BX LR
 	ENDP
 	
@@ -385,11 +387,58 @@ checkButton PROC
 	
 	ALIGN
 gameEnd PROC
-	
+	BL displayLose
 	B mainLoop
 	ENDP
+		
+checkWait PROC
+	push {LR}
+	LDR R0, =2500000
+	
+checkWaitInner
+	SUB R0, R0, #1
+	CMP R0, #0
+	BNE checkWaitInner
+	
+	pop {LR}
+	BX LR
+	ENDP
+displayLose PROC
+	push {LR}
+	MOV R10, #0
+	MOV R1, #0
+	MOV R0, #0
+	LDR R6, =GPIOA_CRL
+	ADD R6, R6, #0x0C
+	STR R0, [R6]
+loseInner
+	CMP R10, #0
+	BEQ lightOuter
+	CMP R10, #1
+	BEQ lightScore
 
-
+lightOuter
+	MOV R0, #0x6
+	MOV R10, #1
+	B displayLED
+lightScore
+	ADD R0, R12, #1
+	EOR R0, R0, #0xF
+	MOV R10, #0
+	B displayLED
+	
+displayLED
+	ADD R1, R1, #1
+	LSL R0, R0, #9
+	LDR R6, =GPIOA_CRL
+	ADD R6, R6, #0x0C
+	STR R0, [R6]
+	BL checkWait 
+	CMP R1, #5
+	BNE loseInner
+	pop {LR}
+	BX LR
+	ENDP
 ;This routine will enable the clock for the Ports that you need	
 ;gets the address of the clock and turns it on for the ports 
 ;address 0x40021018 turning on 00011100 ports A, B and C

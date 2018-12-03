@@ -12,6 +12,12 @@ INITIAL_MSP	EQU		0x20001000	; Initial Main Stack Pointer Value
 GPIOA_CRL	EQU		0x40010800	; (0x00) Port Configuration Register for PA7 -> PA0
 GPIOB_CRL	EQU		0x40010C00	; (0x00) Port Configuration Register For PB7 -> PB0
 GPIOC_CRL	EQU		0x40011000	; (0x00) Port Configuration Register for PC7 -> PC0
+GPIOA_CRH	EQU		0x40010804	; (0x00) Port Configuration Register for PA15 -> PA8
+GPIOA_IDR	EQU		0x40010808	; (0x00) Port Input Register for PA
+GPIOB_IDR	EQU		0x40010C08	; (0x00) Port Input Register for PB
+GPIOC_IDR	EQU		0x40011008	; (0x00) Port Input Register for PC
+GPIOA_ODR	EQU		0x4001080C	; (0x00) Port Output Register for PA	
+	
 RCC_APB2ENR	EQU		0x40021018	; APB2 Peripheral Clock Enable Register
 
 
@@ -42,12 +48,29 @@ Reset_Handler		PROC
 	BL mainLoop
 	
 	ENDP
-	ALIGN	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+mainLoop PROC
+		BL waitForUser
+		BL PrelimWait
+		ENDP
+gameLoop PROC
+		CMP R12, #0x10
+		BEQ winner
+		BL randomLED
+ 		BL delay200ms
+		BL checkButton
+		BL checkLED
+		BL PrelimWait
+		B	gameLoop	;loop
+		ENDP
+			
 winner	PROC
 	MOV R1, #0
 	MOV R10, #0
-	LDR R6, =GPIOA_CRL
-	ADD R6, R6, #0x0C
+	LDR R6, =GPIOA_ODR
 	MOV R3, #0xF
 	LSL R3, #9
 	STR R3, [R6]
@@ -85,8 +108,7 @@ cycleLed4
 	B ledLight
 	
 ledLight
-	LDR R6, =GPIOA_CRL
-	ADD R6, R6, #0x0C
+	LDR R6, =GPIOA_ODR
 	LSL R0, #9
 	STR R0, [R6]
 	ADD R10, R10, #1
@@ -116,27 +138,9 @@ winDelayInner
 	pop {LR}
 	BX LR
 	ENDP
-;Constantly loops checking which buttons are pressed and activating the corressponding LED
-	ALIGN
-mainLoop PROC
-		BL waitForUser
-		BL PrelimWait
-		ENDP
-	ALIGN
-gameLoop PROC
-		CMP R12, #0x10
-		BEQ winner
-		BL randomLED
- 		BL delay200ms
-		BL checkButton
-		BL checkLED
-		BL PrelimWait
-		B	gameLoop	;loop
-		ENDP
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;Flashes LEDs all on and all off whil 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-	ALIGN
 waitForUser PROC
 	push {LR}
 	MOV R0, #0
@@ -161,8 +165,7 @@ waitInner
 	BEQ led2
 	
 led1
-	LDR R6, =GPIOA_CRL
-	ADD R6, R6, #0x0C
+	LDR R6, =GPIOA_ODR
 	LDR R0, [R6]
 	MOV R3, #0xF
 	LSL R3, #9
@@ -171,8 +174,7 @@ led1
 	B check
 
 led2
-	LDR R6, =GPIOA_CRL
-	ADD R6, R6, #0x0C
+	LDR R6, =GPIOA_ODR
 	LDR R0, [R6]
 	MOV R3, #0x0
 	LSL R3, #9
@@ -199,29 +201,25 @@ delayInner
 	SUB R11, R11, #1
 	MOV R8, #1
 	;;button1
-	LDR R0, =GPIOB_CRL
-	ADD R0, R0, #8
+	LDR R0, =GPIOB_IDR
 	LDR R1, [R0]
 	LSR R1, R1, #8
 	AND R1, R8, R1
 	
 	;;button2
-	LDR R0, =GPIOB_CRL
-	ADD R0, R0, #8
+	LDR R0, =GPIOB_IDR
 	LDR R2, [R0]
 	LSR R2, R2, #9
 	AND R2, R8, R2
 	
 	;;button3
-	LDR R0, =GPIOC_CRL
-	ADD R0, R0, #8
+	LDR R0, =GPIOC_IDR
 	LDR R3, [R0]
 	LSR R3, R3, #12
 	AND R3, R8, R3
 	
 	;;button4
-	LDR R0, =GPIOA_CRL
-	ADD R0, R0, #8
+	LDR R0, =GPIOA_IDR
 	LDR R4, [R0]
 	LSR R4, R4, #5
 	AND R4, R8, R4
@@ -257,13 +255,11 @@ buttonClicked PROC
 	BX LR
 	ENDP
 	
-	ALIGN	
 PrelimWait PROC
 	push {LR}
 	LDR R1, =800000
 	
-	LDR R6, =GPIOA_CRL
-	ADD R6, R6, #0x0C
+	LDR R6, =GPIOA_ODR
 	LDR R0, [R6]
 	MOV R3, #0xF
 	LSL R3, #9
@@ -279,7 +275,6 @@ prelimInner
 	BX LR
 	ENDP
 		
-	ALIGN	
 randomLED PROC
 	LDR R8, =AConstant
 	LDR R9, =CConstant
@@ -323,8 +318,7 @@ LED4
 	B continueLED
 	
 continueLED
-	LDR R6, =GPIOA_CRL
-	ADD R6, R6, #0x0C
+	LDR R6, =GPIOA_ODR
 	STR R0, [R6]
 	
 	BX LR
@@ -333,8 +327,7 @@ continueLED
 checkLED PROC
 	push {LR}
 	
-	LDR R6, =GPIOA_CRL
-	ADD R6, R6, #0x0C
+	LDR R6, =GPIOA_ODR
 	LDR R6, [R6]
 	LSR R6, R6, #9
 	AND R6, R6, #0xF
@@ -378,14 +371,12 @@ validLed
 	BX LR
 	ENDP
 	
-	ALIGN
 checkButton PROC
 	CMP R5, #0xF
 	BEQ gameEnd
 	BX LR
 	ENDP
 	
-	ALIGN
 gameEnd PROC
 	BL displayLose
 	B mainLoop
@@ -408,8 +399,7 @@ displayLose PROC
 	MOV R10, #0
 	MOV R1, #0
 	MOV R0, #0
-	LDR R6, =GPIOA_CRL
-	ADD R6, R6, #0x0C
+	LDR R6, =GPIOA_ODR
 	STR R0, [R6]
 loseInner
 	CMP R10, #0
@@ -430,8 +420,7 @@ lightScore
 displayLED
 	ADD R1, R1, #1
 	LSL R0, R0, #9
-	LDR R6, =GPIOA_CRL
-	ADD R6, R6, #0x0C
+	LDR R6, =GPIOA_ODR
 	STR R0, [R6]
 	BL checkWait 
 	CMP R1, #5
@@ -455,30 +444,25 @@ GPIO_ClockInit PROC
 		
 	ALIGN
 		
-;This routine enables the GPIO for the LED;s
-;GPIO CRH Mod set for Leds on port A 9 - 12, and button on port A5, B8, B9, C12
-;loads initial value, sets led/btn stores it back in the memory location
+;This routine enables the GPIO for the LEDs
+;GPIO CRH Mode set for Leds on port A 9 - 12
 GPIO_init  PROC
 	
-
 	;LEDS
 	;stored in port A, HRL 9 - 12
 	;00 for general purpose output push-pull
 	;11 for output mode max speed 50 mhz
-	;0011 is loaded in (0x3) for each LED 
-	LDR R6, =GPIOA_CRL
-	ADD R5, R6, #0x04
-	LDR R0, [R5]
+	LDR R6, =GPIOA_CRH
+	LDR R0, [R6]
 	LDR R1, =0xFFF0000F
 	AND R0, R1
 	LDR R2, =0x33330
 	ADD R0, R0, R2
-	STR R0, [R5]
+	STR R0, [R6]
 	BX LR
 	ENDP
 
 ;;delays program using clock times/process clock counts
-
 
 	ALIGN
 

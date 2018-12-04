@@ -22,8 +22,12 @@ RCC_APB2ENR	EQU		0x40021018	; APB2 Peripheral Clock Enable Register
 
 
 ; Times for delay routines
-DELAYTIME	EQU	150000
-
+DELAYTIME	EQU	1500000
+WINDELAY	EQU 200000
+PRELIMDELAY EQU 800000
+CHECKDELAY  EQU 2500000
+CYCLES 		EQU 0x10
+	
 ; Constants for Random Number Generation
 AConstant 	EQU 	1664525
 CConstant	EQU 	1013904223
@@ -57,7 +61,8 @@ mainLoop PROC
 		BL PrelimWait
 		ENDP
 gameLoop PROC
-		CMP R12, #0x10
+		LDR R1, =CYCLES
+		CMP R12, R1
 		BEQ winner
 		BL randomLED
  		BL delay200ms
@@ -127,7 +132,7 @@ continueWin
 	ALIGN	
 winnerDelay PROC
 	push {LR}
-	LDR R11, =200000
+	LDR R11, =WINDELAY
 	
 winDelayInner
 	SUB R11, R11, #1
@@ -191,10 +196,16 @@ check
 
 delay200ms PROC
 	push {LR}
+	MOV R0, #2
+	LDR R1, =CYCLES
 	LDR R11, =DELAYTIME
-	MOV R1, #7500
-	MUL R0, R12, R7
+	MUL R0, R0, R1
+	UDIV R0, R11, R0
+	MUL R0, R0, R12
 	SUB R11, R11, R0
+	;MOV R1, #7500
+	;MUL R0, R12, R7
+	;SUB R11, R11, R0
 	MOV R1, #0
 	MOV R0, #0
 delayInner
@@ -257,7 +268,7 @@ buttonClicked PROC
 	
 PrelimWait PROC
 	push {LR}
-	LDR R1, =800000
+	LDR R1, =PRELIMDELAY
 	
 	LDR R6, =GPIOA_ODR
 	LDR R0, [R6]
@@ -384,7 +395,7 @@ gameEnd PROC
 		
 checkWait PROC
 	push {LR}
-	LDR R0, =2500000
+	LDR R0, =CHECKDELAY
 	
 checkWaitInner
 	SUB R0, R0, #1
@@ -412,7 +423,8 @@ lightOuter
 	MOV R10, #1
 	B displayLED
 lightScore
-	ADD R0, R12, #1
+	MOV R0, R12
+	;ADD R0, R12, #1
 	EOR R0, R0, #0xF
 	MOV R10, #0
 	B displayLED

@@ -1,3 +1,7 @@
+;;Avery Cameron
+;;December 3, 2018
+;;ENSE 352
+;;Whack a Mole Term Project
 ;;; Directives
             PRESERVE8
             THUMB       		 
@@ -22,7 +26,7 @@ RCC_APB2ENR	EQU		0x40021018	; APB2 Peripheral Clock Enable Register
 
 
 ; Times for delay routines
-DELAYTIME	EQU	1500000
+DELAYTIME	EQU	150000
 WINDELAY	EQU 200000
 PRELIMDELAY EQU 800000
 CHECKDELAY  EQU 2500000
@@ -32,7 +36,6 @@ CYCLES 		EQU 0x10
 AConstant 	EQU 	1664525
 CConstant	EQU 	1013904223
 MConstant	EQU 	0xFFFFFFFF
-
 ; Vector Table Mapped to Address 0 at Reset
             AREA    RESET, Data, READONLY
             EXPORT  __Vectors
@@ -52,14 +55,16 @@ Reset_Handler		PROC
 	BL mainLoop
 	
 	ENDP
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 mainLoop PROC
 		BL waitForUser
 		BL PrelimWait
 		ENDP
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; loads cycles into R1
+;; Branches to winner when score in R12 equals CYCLES
+;; Picks a random led, checks user input, verifies input and loops
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 gameLoop PROC
 		LDR R1, =CYCLES
 		CMP R12, R1
@@ -71,7 +76,17 @@ gameLoop PROC
 		BL PrelimWait
 		B	gameLoop	;loop
 		ENDP
-			
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Displays winning LED Pattern
+;; 	-a cycle of one led on and back 2 times
+;; Require:
+;; 		None
+;; Note: following registers are changed 
+;; R1, used for getting cycles of winning pattern
+;; R10 used for led to display 
+;; R6 used for LED GPIOA_IDR
+;; R0 used for displaying sepecific LED
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;			
 winner	PROC
 	MOV R1, #0
 	MOV R10, #0
@@ -81,6 +96,7 @@ winner	PROC
 	STR R3, [R6]
 winnerInner
 	BL winnerDelay
+;;allows for cycle back and forth
 	ADD R1, #1
 	CMP R10, #0
 	BEQ cycleLed1
@@ -99,6 +115,7 @@ winnerInner
 	CMP R10, #7
 	BEQ cycleLed1
 	
+;;sets an LED value
 cycleLed1
 	MOV R0, #0xE
 	B ledLight
@@ -112,6 +129,7 @@ cycleLed4
 	MOV R0, #0x7
 	B ledLight
 	
+;;turns on the proper LED	
 ledLight
 	LDR R6, =GPIOA_ODR
 	LSL R0, #9
@@ -120,16 +138,25 @@ ledLight
 	CMP R10, #7
 	BEQ reset10
 	B continueWin
+;;this resets 10 so it runs twice
 reset10
 	MOV R10, #0
 continueWin	
+;;once win loop is complete, start program over again
 	CMP R1, #0xF
 	BEQ mainLoop
 	
 	B winnerInner
 	ENDP
 		
-	ALIGN	
+	ALIGN
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; winnerDelay
+;;  	takes WINDELAY constant and subtracts 1 to create a delay timer
+;; PROMISE:
+;;		R11 will be 0
+;; 		Program will exit back to proper location afterward
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 winnerDelay PROC
 	push {LR}
 	LDR R11, =WINDELAY
@@ -143,9 +170,17 @@ winDelayInner
 	pop {LR}
 	BX LR
 	ENDP
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;Flashes LEDs all on and all off whil 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; waitForUser
+;;		Resets all registers to 0 initially for game start
+;; 		takes user input from buttons, exits when any are pressed
+;;		alternates a solid on and solid off signal
+;; Promise
+;;		R11 will hold the value remaining in timer when loop is exited on user input
+;;		R1 - R4 hold button input, 1 for none, 0 for input
+;; Require
+;;		R11 constant DELAYTIME must be greater than or equal to 0 (larger shows longer)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 waitForUser PROC
 	push {LR}
 	MOV R0, #0
@@ -194,8 +229,18 @@ check
 	BX LR
 	ENDP
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; delay200ms
+;;		delays for user's set time, takes button input each loop
+;;		exits loop when user input detected
+;; PROMISE
+;;		R11 holds counter value, whatever the value is on exit
+;; REQUIRE
+;;		R11 holds DELAYTIME
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 delay200ms PROC
 	push {LR}
+;; code block to calculate delay time = time - (time/(2*cycles) * currentCycle)
 	MOV R0, #2
 	LDR R1, =CYCLES
 	LDR R11, =DELAYTIME
@@ -203,11 +248,10 @@ delay200ms PROC
 	UDIV R0, R11, R0
 	MUL R0, R0, R12
 	SUB R11, R11, R0
-	;MOV R1, #7500
-	;MUL R0, R12, R7
-	;SUB R11, R11, R0
+;;
 	MOV R1, #0
 	MOV R0, #0
+;;reduces R11, constantly polls buttons
 delayInner
 	SUB R11, R11, #1
 	MOV R8, #1
@@ -234,7 +278,7 @@ delayInner
 	LDR R4, [R0]
 	LSR R4, R4, #5
 	AND R4, R8, R4
-	
+;;loads button presses into R5, into bits 0 to 3	
 	MOV R5, R4
 	LSL R5, #1
 	ADD R5, R3
@@ -250,8 +294,18 @@ delayInner
 	pop {LR}
 	BX LR
 	ENDP
-		
-	ALIGN
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; buttonClicked
+;;		called on button click
+;;		XORs button input to invert bits
+;;		bits in R7, R8, and R9, R10 are XORd together
+;; 		if any 2 buttons are both pressed, (1 after inversion) XOR will result in 0
+;; REQUIRE
+;;		button input in register R1 to R4
+;; PROMISE
+;;		register R7, will return 1 if only one pressed
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 buttonClicked PROC
 	MOV R7, #0xF
 	EOR R7, R1, #1
@@ -265,7 +319,12 @@ buttonClicked PROC
 	pop {LR}
 	BX LR
 	ENDP
-	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PrelimWait
+;; 		delays by PRELIMDELAY set at top of file
+;; WARN:
+;;		R1, will be 0 at end of the loop
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 PrelimWait PROC
 	push {LR}
 	LDR R1, =PRELIMDELAY
@@ -279,13 +338,25 @@ PrelimWait PROC
 prelimInner
 	SUB R1, R1, #1
 	CMP R1, #0
-	
 	BNE prelimInner
 	
 	pop {LR}
 	BX LR
 	ENDP
-		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; randomLED
+;; 		Selects a randomLED based on random number 
+;; 		using equation (a*x + c) % M 
+;;		top 2 bits of random number are used to select LED, 00 for 1 etc
+;; NOTE:
+;;		M is 2^32 which is equivalent of & (2^32 -1) which leaves a*x + c
+;;		x is the remaining time from counter of DELAYTIME 
+;; REQUIRE:
+;;		None
+;; PROMISE:
+;;		RO will contain random number
+;;		R8, R9, will be set to AConstant and CConstant
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 randomLED PROC
 	LDR R8, =AConstant
 	LDR R9, =CConstant
@@ -334,7 +405,13 @@ continueLED
 	
 	BX LR
 	ENDP
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;	checkLED
+;;		based on LED that is on, button pattern is checked for match
+;;		game enters fail stat if buttons and LEDs dont match
+;;	REQUIRE:
+;;		R5 contains button inputs
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 checkLED PROC
 	push {LR}
 	
@@ -374,25 +451,37 @@ checkBtn4
 	CMP R5, #0x7
 	BEQ validLed
 	B gameEnd
-
+;;increment score
 validLed
 	ADD R12, R12, #1
 	
 	pop {LR}
 	BX LR
 	ENDP
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;	checkButton
+;;		if no button is pressed, patern will be 1111 or 0xF
+;;			therefore enter fail state
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	
 checkButton PROC
 	CMP R5, #0xF
 	BEQ gameEnd
 	BX LR
 	ENDP
-	
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;	gameEND
+;;		display score on Lose
+;;		start mainloop again
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	
 gameEnd PROC
 	BL displayLose
 	B mainLoop
 	ENDP
-		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;	checkWait
+;;		loop to delay CHECK, reduces risk of timing error 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;		
 checkWait PROC
 	push {LR}
 	LDR R0, =CHECKDELAY
@@ -405,6 +494,13 @@ checkWaitInner
 	pop {LR}
 	BX LR
 	ENDP
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; displayLose
+;;		alternates between user Score and outer leds on
+;;		allows for score of zero to be displayable
+;;		cycles 3 times, display 6 times total
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 displayLose PROC
 	push {LR}
 	MOV R10, #0
@@ -440,6 +536,7 @@ displayLED
 	pop {LR}
 	BX LR
 	ENDP
+		
 ;This routine will enable the clock for the Ports that you need	
 ;gets the address of the clock and turns it on for the ports 
 ;address 0x40021018 turning on 00011100 ports A, B and C

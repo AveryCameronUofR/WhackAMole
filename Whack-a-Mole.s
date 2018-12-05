@@ -35,7 +35,7 @@ DELAYTIME	EQU	450000
 WINDELAY	EQU 200000
 PRELIMDELAY EQU 800000
 CHECKDELAY  EQU 2500000
-PROFDELAY	EQU 999999999
+PROFDELAY	EQU 10500000
 ; Cycles taken to win
 CYCLES 		EQU 4
 	
@@ -99,6 +99,7 @@ winner	PROC
 	MOV R3, #0xF
 	LSL R3, #9
 	STR R3, [R0]
+;;gets number between 0 and 9 for proficiency timeTaken * 10 / timeallowed
 	LDR R11, =DELAYTIME
 	SUB R8, R8, R11
 	MOV R5, #10
@@ -138,7 +139,7 @@ cycleLed4
 	MOV R3, #0x7
 	B ledLight
 profComplete
-	B mainLoop
+	B waitForUser
 ;;turns on the proper LED	
 ledLight
 	LDR R0, =GPIOA_ODR
@@ -157,12 +158,20 @@ continueWin
 	BEQ displayProf
 	B winnerInner
 	ENDP
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Determines proficiency and displays it to user
+;; Requires proficiency calculation in R10
+;;
+;; checks the proficiency stored in R10
+;; sets LED in R2 to display proficiency
+;; displays proficiency 0 - 9 in binary to LEDs
+;; delays for approx 1 minute using a loop, can be exited by user input similar to waitForPlayer
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	
 displayProf PROC
 	LDR R0, =GPIOA_ODR
 	MOV R2, #0xF
 	LSL R2, R2, #9
 	STR R2, [R0]
-	LDR R11, =PROFDELAY
 	CMP R10, #9
 	BEQ prof90
 	CMP R10, #8
@@ -181,59 +190,54 @@ displayProf PROC
 	BEQ prof20
 	CMP R10, #1
 	BEQ prof10
-	CMP R10, #80
+	CMP R10, #0
 	BEQ prof00
 prof90
-	MOV R3, #6
+	MOV R2, #0x6
+	LSL R2, R2, #9
 	B profInner
 prof80
-	MOV R3, #7
+	MOV R2, #0x7
+	LSL R2, R2, #10
 	B profInner
 prof70
-	MOV R3, #8
+	MOV R2, #0x8
+	LSL R2, R2, #6
 	B profInner
 prof60
-	MOV R3, #9
+	MOV R2, #0x9
+	LSL R2, R2, #9
 	B profInner
 prof50
-	MOV R3, #10
+	MOV R2, #0xA
+	LSL R2, R2, #8
 	B profInner
 prof40
-	MOV R3, #11
+	MOV R2, #0xD
+	LSL R2, R2, #9
 	B profInner
 prof30
-	MOV R3, #12
+	MOV R2, #0xC
+	LSL R2, R2, #7
 	B profInner
 prof20
-	MOV R3, #13
+	MOV R2, #0xB
+	LSL R2, R2, #9
 	B profInner
 prof10
-	MOV R3, #14
+	MOV R2, #0x7
+	LSL R2, R2, #9
 	B profInner
 prof00
-	MOV R3, #15
+	MOV R2, #0xF
+	LSL R2, R2, #9
 	B profInner
 profInner
-	BL delay200ms
-	CMP R1, #0xF
-	BNE profComplete
-	CMP R9, #0
-	BEQ profLED
-	CMP R9, #1
-	BEQ blankLED
-profLED 
+	MOV R7, #1
 	LDR R0, =GPIOA_ODR
-	LSL R3, R3, #9
-	STR R3, [R0]
-	MOV R9, #1
-	B profInner
-blankLED
-	MOV R2, #0xF
-	LDR R0, =GPIOA_ODR
-	LSL R2, R2, #9
 	STR R2, [R0]
-	MOV R9, #0
-	B profInner
+	BL delay200ms
+	B profComplete
 	ENDP
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; winnerDelay
@@ -296,7 +300,6 @@ led1
 led2
 	LDR R0, =GPIOA_ODR
 	MOV R3, #0x0
-	LSL R3, #9
 	STR R3, [R0]
 	MOV R9, #0
 	B check
@@ -326,7 +329,11 @@ delay200ms PROC
 	MUL R0, R0, R12
 	SUB R11, R11, R0
 	ADD R8, R8, R11
-;;
+
+	CMP R7, #0
+	BEQ ignoreProfWaitTime
+	LDR R11, =PROFDELAY
+ignoreProfWaitTime
 	MOV R1, #0
 	MOV R0, #0
 	MOV R4, #1

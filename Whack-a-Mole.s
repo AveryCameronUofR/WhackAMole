@@ -474,7 +474,7 @@ checkWaitInner
 displayLose PROC
 	push {LR}
 	MOV R10, #0
-	MOV R1, #0
+	MOV R4, #0
 	MOV R0, #0
 	LDR R6, =GPIOA_ODR
 	STR R0, [R6]
@@ -485,23 +485,23 @@ loseInner
 	BEQ lightScore
 
 lightOuter
-	MOV R0, #0x6
+	MOV R3, #0x6
 	MOV R10, #1
 	B displayLED
 lightScore
-	MOV R0, R12
+	MOV R3, R12
 	;ADD R0, R12, #1
-	EOR R0, R0, #0xF
+	EOR R3, R3, #0xF
 	MOV R10, #0
 	B displayLED
 	
 displayLED
-	ADD R1, R1, #1
-	LSL R0, R0, #9
-	LDR R6, =GPIOA_ODR
-	STR R0, [R6]
+	ADD R4, R4, #1
+	LSL R3, R3, #9
+	LDR R0, =GPIOA_ODR
+	STR R3, [R0]
 	BL checkWait 
-	CMP R1, #5
+	CMP R4, #5
 	BNE loseInner
 	pop {LR}
 	BX LR

@@ -34,7 +34,7 @@ RCC_APB2ENR	EQU		0x40021018	; APB2 Peripheral Clock Enable Register
 
 
 ; Times for delay routines
-DELAYTIME	EQU	150000
+DELAYTIME	EQU	450000
 WINDELAY	EQU 200000
 PRELIMDELAY EQU 800000
 CHECKDELAY  EQU 2500000
@@ -79,7 +79,6 @@ gameLoop PROC
 		BEQ winner
 		BL randomLED
  		BL delay200ms
-		BL checkButton
 		BL checkLED
 		BL PrelimWait
 		B	gameLoop	;loop
@@ -229,8 +228,8 @@ led2
 	B check
 
 check
-	CMP R7, #1
-	BNE waitInner
+	CMP R1, #0xF
+	BEQ waitInner
 	pop {LR}
 	BX LR
 	ENDP
@@ -290,38 +289,14 @@ delayInner
 	
 	
 	CMP R1, #0xF
-	BNE buttonClicked
+	BNE checkButton
 	
 	CMP R11, #0
 	BNE delayInner
 	pop {LR}
 	BX LR
 	ENDP
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; buttonClicked
-;;		called on button click
-;;		XORs button input to invert bits
-;;		bits in R7, R8, and R9, R10 are XORd together
-;; 		if any 2 buttons are both pressed, (1 after inversion) XOR will result in 0
-;; REQUIRE
-;;		button input in register R1 to R4
-;; PROMISE
-;;		register R7, will return 1 if only one pressed
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-buttonClicked PROC
-	MOV R7, #0xF
-	EOR R7, R1, #1
-	EOR R8, R2, #1
-	EOR R9, R3, #1
-	EOR R10, R4, #1
-	
-	EOR R7, R7, R8 
-	EOR R8, R9, R10
-	EOR R7, R8
-	pop {LR}
-	BX LR
-	ENDP
+ 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; PrelimWait
 ;; 		delays by PRELIMDELAY set at top of file
@@ -330,17 +305,16 @@ buttonClicked PROC
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 PrelimWait PROC
 	push {LR}
-	LDR R1, =PRELIMDELAY
+	LDR R3, =PRELIMDELAY
 	
-	LDR R6, =GPIOA_ODR
-	LDR R0, [R6]
-	MOV R3, #0xF
-	LSL R3, #9
-	STR R3, [R6]
+	LDR R0, =GPIOA_ODR
+	MOV R4, #0xF
+	LSL R4, #9
+	STR R4, [R0]
 	
 prelimInner
-	SUB R1, R1, #1
-	CMP R1, #0
+	SUB R3, R3, #1
+	CMP R3, #0
 	BNE prelimInner
 	
 	pop {LR}
@@ -361,13 +335,13 @@ prelimInner
 ;;		R8, R9, will be set to AConstant and CConstant
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 randomLED PROC
-	LDR R8, =AConstant
-	LDR R9, =CConstant
-	LDR R10, =MConstant
-	MUL R0, R8, R11
-	ADD R0, R0, R9
-	AND R0, R0, R10
-	LSR R0, R0, #30
+	LDR R0, =AConstant
+	LDR R1, =CConstant
+	;LDR R10, =MConstant
+	MUL R0, R0, R11
+	ADD R0, R0, R1
+	;AND R0, R0, R10
+	;LSR R0, R0, #30
 	AND R0, R0, #3
 	CMP R0, #0
 	BEQ LED1
@@ -379,32 +353,25 @@ randomLED PROC
 	BEQ LED4
 	
 LED1
-	MOV R0, #1
-	LSL R0, R0, #9
-	EOR R0, R10
+	MOV R1, #7
 	B continueLED
 
 LED2
-	MOV R0, #1
-	LSL R0, R0, #10
-	EOR R0, R10
+	MOV R1, #0xB
 	B continueLED
 	
 LED3
-	MOV R0, #1
-	LSL R0, R0, #11
-	EOR R0, R10
+	MOV R1, #0xD
 	B continueLED
 	
 LED4
-	MOV R0, #1
-	LSL R0, R0, #12
-	EOR R0, R10
+	MOV R1, #0xE
 	B continueLED
 	
 continueLED
-	LDR R6, =GPIOA_ODR
-	STR R0, [R6]
+	LDR R0, =GPIOA_ODR
+	LSL R1, R1, #9
+	STR R1, [R0]
 	
 	BX LR
 	ENDP
@@ -418,40 +385,40 @@ continueLED
 checkLED PROC
 	push {LR}
 	
-	LDR R6, =GPIOA_ODR
-	LDR R6, [R6]
-	LSR R6, R6, #9
-	AND R6, R6, #0xF
+	LDR R0, =GPIOA_ODR
+	LDR R0, [R0]
+	LSR R0, R0, #9
+	AND R0, R0, #0xF
 	
-	CMP R6, #0xE
+	CMP R0, #0xE
 	BEQ checkBtn1
 	
-	CMP R6, #0xD
+	CMP R0, #0xD
 	BEQ checkBtn2
 	
-	CMP R6, #0xB
+	CMP R0, #0xB
 	BEQ checkBtn3
 	
-	CMP R6, #0x7
+	CMP R0, #0x7
 	BEQ checkBtn4
 	B gameEnd
 checkBtn1
-	CMP R5, #0xE
+	CMP R1, #0xE
 	BEQ validLed
 	B gameEnd
 	
 checkBtn2
-	CMP R5, #0xD
+	CMP R1, #0xD
 	BEQ validLed
 	B gameEnd
 	
 checkBtn3
-	CMP R5, #0xB
+	CMP R1, #0xB
 	BEQ validLed
 	B gameEnd
 	
 checkBtn4
-	CMP R5, #0x7
+	CMP R1, #0x7
 	BEQ validLed
 	B gameEnd
 ;;increment score

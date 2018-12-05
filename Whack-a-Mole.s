@@ -248,51 +248,48 @@ delay200ms PROC
 	push {LR}
 ;; code block to calculate delay time = time - (time/(2*cycles) * currentCycle)
 	MOV R0, #2
-	LDR R1, =CYCLES
+	LDR R4, =CYCLES
 	LDR R11, =DELAYTIME
-	MUL R0, R0, R1
+	MUL R0, R0, R4
 	UDIV R0, R11, R0
 	MUL R0, R0, R12
 	SUB R11, R11, R0
 ;;
 	MOV R1, #0
 	MOV R0, #0
+	MOV R4, #1
 ;;reduces R11, constantly polls buttons
 delayInner
 	SUB R11, R11, #1
-	MOV R8, #1
-	;;button1
-	LDR R0, =GPIOB_IDR
-	LDR R1, [R0]
-	LSR R1, R1, #8
-	AND R1, R8, R1
 	
-	;;button2
-	LDR R0, =GPIOB_IDR
-	LDR R2, [R0]
-	LSR R2, R2, #9
-	AND R2, R8, R2
+	;;button4
+	LDR R0, =GPIOA_IDR
+	LDR R3, [R0]
+	LSR R3, R3, #5
+	AND R3, R3, #1
+	
+	MOV R1, R3
+	LSL R1, #1
 	
 	;;button3
 	LDR R0, =GPIOC_IDR
 	LDR R3, [R0]
 	LSR R3, R3, #12
-	AND R3, R8, R3
+	AND R3, #1
 	
-	;;button4
-	LDR R0, =GPIOA_IDR
-	LDR R4, [R0]
-	LSR R4, R4, #5
-	AND R4, R8, R4
-;;loads button presses into R5, into bits 0 to 3	
-	MOV R5, R4
-	LSL R5, #1
-	ADD R5, R3
-	LSL R5, #1
-	ADD R5, R2
-	LSL R5, #1
-	ADD R5, R1
-	CMP R5, #0xF
+	ADD R1, R1, R3
+	LSL R1, #2
+	
+	;;button 1 &2
+	LDR R0, =GPIOB_IDR
+	LDR R3, [R0]
+	LSR R3, R3, #8
+	AND R3, #3
+	
+	ADD R1, R1, R3
+	
+	
+	CMP R1, #0xF
 	BNE buttonClicked
 	
 	CMP R11, #0

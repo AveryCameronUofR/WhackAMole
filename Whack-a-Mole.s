@@ -11,7 +11,7 @@
 ;;R3 for functions
 ;;R12 for score
 ;;R11 for count
-;;R10 for comparisons
+;;R9 for comparisons
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
             PRESERVE8
             THUMB       		 
@@ -35,8 +35,9 @@ DELAYTIME	EQU	450000
 WINDELAY	EQU 200000
 PRELIMDELAY EQU 800000
 CHECKDELAY  EQU 2500000
+PROFDELAY	EQU 999999999
 ; Cycles taken to win
-CYCLES 		EQU 16
+CYCLES 		EQU 4
 	
 ; Constants for Random Number Generation
 AConstant 	EQU 	1664525
@@ -51,19 +52,20 @@ __Vectors	DCD		INITIAL_MSP			; stack pointer value when stack is empty
             AREA    MYCODE, CODE, READONLY
 			EXPORT	Reset_Handler
 			ENTRY
-
+;;Use Case 1: System Boot by Reset Button
 Reset_Handler		PROC
 	BL GPIO_ClockInit
-	;LDR R8, =0x40033
 	BL GPIO_init
 	BL mainLoop
 	ENDP
-
+;;Use Case 2: Waiting for player, waitForUser loops until user input detected
 mainLoop PROC
 		BL waitForUser
 		BL PrelimWait
 		ENDP
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Use Case 3: Normal Game Play
+;; random Led loaded, user has to react before timer expires (if true loop, if false Use Case 5: Failure)
 ;; loads cycles into R1
 ;; Branches to winner when score in R12 equals CYCLES
 ;; Picks a random led, checks user input, verifies input and loops
@@ -79,44 +81,49 @@ gameLoop PROC
 		B	gameLoop	;loop
 		ENDP
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Use Case 4: End Success - user has won the game and winning signal is displayed
 ;; Displays winning LED Pattern
 ;; 	-a cycle of one led on and back 2 times
 ;; Require:
 ;; 		None
 ;; Note: following registers are changed 
 ;; R4, used for getting cycles of winning pattern
-;; R10 used for led to display 
-;; R6 used for LED GPIOA_IDR
-;; R0 used for displaying sepecific LED
+;; R3 used for led to display 
+;; R0 used for LED GPIOA_IDR
+;; R10 used for cycling back and forth
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;			
 winner	PROC
 	MOV R4, #0
-	MOV R10, #0
+	MOV R9, #0
 	LDR R0, =GPIOA_ODR
 	MOV R3, #0xF
 	LSL R3, #9
 	STR R3, [R0]
+	LDR R11, =DELAYTIME
+	SUB R8, R8, R11
+	MOV R5, #10
+	MUL R10, R10, R5
+	UDIV R10, R10, R8
 winnerInner
 	BL winnerDelay
 ;;allows for cycle back and forth
 	ADD R4, #1
-	CMP R10, #0
+	CMP R9, #0
 	BEQ cycleLed1
-	CMP R10, #1
+	CMP R9, #1
 	BEQ cycleLed2
-	CMP R10, #2
+	CMP R9, #2
 	BEQ cycleLed3
-	CMP R10, #3
+	CMP R9, #3
 	BEQ cycleLed4
-	CMP R10, #4
+	CMP R9, #4
 	BEQ cycleLed4
-	CMP R10, #5
+	CMP R9, #5
 	BEQ cycleLed3
-	CMP R10, #6
+	CMP R9, #6
 	BEQ cycleLed2
-	CMP R10, #7
+	CMP R9, #7
 	BEQ cycleLed1
-	
 ;;sets an LED value
 cycleLed1
 	MOV R3, #0xE
@@ -130,27 +137,104 @@ cycleLed3
 cycleLed4
 	MOV R3, #0x7
 	B ledLight
-	
+profComplete
+	B mainLoop
 ;;turns on the proper LED	
 ledLight
 	LDR R0, =GPIOA_ODR
 	LSL R3, #9
 	STR R3, [R0]
-	ADD R10, R10, #1
-	CMP R10, #7
+	ADD R9, R9, #1
+	CMP R9, #7
 	BEQ reset10
 	B continueWin
 ;;this resets 10 so it runs twice
 reset10
-	MOV R10, #0
+	MOV R9, #0
 continueWin	
 ;;once win loop is complete, start program over again
 	CMP R4, #0xF
-	BEQ mainLoop
+	BEQ displayProf
 	B winnerInner
 	ENDP
-		
-	ALIGN
+displayProf PROC
+	LDR R0, =GPIOA_ODR
+	MOV R2, #0xF
+	LSL R2, R2, #9
+	STR R2, [R0]
+	LDR R11, =PROFDELAY
+	CMP R10, #9
+	BEQ prof90
+	CMP R10, #8
+	BEQ prof80
+	CMP R10, #7
+	BEQ prof70
+	CMP R10, #6
+	BEQ prof60
+	CMP R10, #5
+	BEQ prof50
+	CMP R10, #4
+	BEQ prof40
+	CMP R10, #3
+	BEQ prof30
+	CMP R10, #2
+	BEQ prof20
+	CMP R10, #1
+	BEQ prof10
+	CMP R10, #80
+	BEQ prof00
+prof90
+	MOV R3, #6
+	B profInner
+prof80
+	MOV R3, #7
+	B profInner
+prof70
+	MOV R3, #8
+	B profInner
+prof60
+	MOV R3, #9
+	B profInner
+prof50
+	MOV R3, #10
+	B profInner
+prof40
+	MOV R3, #11
+	B profInner
+prof30
+	MOV R3, #12
+	B profInner
+prof20
+	MOV R3, #13
+	B profInner
+prof10
+	MOV R3, #14
+	B profInner
+prof00
+	MOV R3, #15
+	B profInner
+profInner
+	BL delay200ms
+	CMP R1, #0xF
+	BNE profComplete
+	CMP R9, #0
+	BEQ profLED
+	CMP R9, #1
+	BEQ blankLED
+profLED 
+	LDR R0, =GPIOA_ODR
+	LSL R3, R3, #9
+	STR R3, [R0]
+	MOV R9, #1
+	B profInner
+blankLED
+	MOV R2, #0xF
+	LDR R0, =GPIOA_ODR
+	LSL R2, R2, #9
+	STR R2, [R0]
+	MOV R9, #0
+	B profInner
+	ENDP
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; winnerDelay
 ;;  	takes WINDELAY constant and subtracts 1 to create a delay timer
@@ -169,6 +253,7 @@ winDelayInner
 	BX LR
 	ENDP
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Use Case 2
 ;; waitForUser
 ;;		Resets all registers to 0 initially for game start
 ;; 		takes user input from buttons, exits when any are pressed
@@ -197,23 +282,23 @@ waitForUser PROC
 	MOV R12, #0
 waitInner
 	BL delay200ms
-	CMP R10, #0
+	CMP R9, #0
 	BEQ led1
-	CMP R10, #1
+	CMP R9, #1
 	BEQ led2
 led1
 	LDR R0, =GPIOA_ODR
 	MOV R3, #0xF
 	LSL R3, #9
 	STR R3, [R0]
-	MOV R10, #1
+	MOV R9, #1
 	B check
 led2
 	LDR R0, =GPIOA_ODR
 	MOV R3, #0x0
 	LSL R3, #9
 	STR R3, [R0]
-	MOV R10, #0
+	MOV R9, #0
 	B check
 check
 	CMP R1, #0xF
@@ -240,6 +325,7 @@ delay200ms PROC
 	UDIV R0, R11, R0
 	MUL R0, R0, R12
 	SUB R11, R11, R0
+	ADD R8, R8, R11
 ;;
 	MOV R1, #0
 	MOV R0, #0
@@ -298,6 +384,7 @@ prelimInner
 	BX LR
 	ENDP
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Part of Use Case 3
 ;; randomLED
 ;; 		Selects a randomLED based on random number 
 ;; 		using equation (a*x + c) % M 
@@ -314,11 +401,8 @@ prelimInner
 randomLED PROC
 	LDR R0, =AConstant
 	LDR R1, =CConstant
-	;LDR R10, =MConstant
 	MUL R0, R0, R11
 	ADD R0, R0, R1
-	;AND R0, R0, R10
-	;LSR R0, R0, #30
 	AND R0, R0, #3
 	CMP R0, #0
 	BEQ LED1
@@ -347,6 +431,7 @@ continueLED
 	BX LR
 	ENDP
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Part of Use Case 3
 ;;	checkLED
 ;;		based on LED that is on, button pattern is checked for match
 ;;		game enters fail stat if buttons and LEDs dont match
@@ -391,10 +476,12 @@ checkBtn4
 ;;increment score
 validLed
 	ADD R12, R12, #1	
+	ADD R10, R10, R11
 	pop {LR}
 	BX LR
 	ENDP
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Part of Use Case 5
 ;;	gameEND
 ;;		display score on Lose
 ;;		start mainloop again
@@ -418,33 +505,34 @@ checkWaitInner
 	BX LR
 	ENDP
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Part of Use Case 5
 ;; displayLose
 ;;		alternates between user Score and outer leds on
 ;;		allows for score of zero to be displayable
 ;;		cycles 3 times, display 6 times total
-;; R10 used for Compare, R0 for loading register, R3 for LEDs, R4 for counter
+;; R9 used for Compare, R0 for loading register, R3 for LEDs, R4 for counter
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 displayLose PROC
 	push {LR}
-	MOV R10, #0
+	MOV R9, #0
 	MOV R4, #0
 	MOV R0, #0
 	LDR R0, =GPIOA_ODR
 	STR R4, [R0]
 loseInner
-	CMP R10, #0
+	CMP R9, #0
 	BEQ lightOuter
-	CMP R10, #1
+	CMP R9, #1
 	BEQ lightScore
 lightOuter
 	MOV R3, #0x6
-	MOV R10, #1
+	MOV R9, #1
 	B displayLED
 lightScore
 	MOV R3, R12
 	;ADD R0, R12, #1
 	EOR R3, R3, #0xF
-	MOV R10, #0
+	MOV R9, #0
 	B displayLED
 displayLED
 	ADD R4, R4, #1
@@ -461,35 +549,30 @@ displayLED
 ;gets the address of the clock and turns it on for the ports 
 ;address 0x40021018 turning on 00011100 ports A, B and C
 GPIO_ClockInit PROC
-
-	LDR R6, =RCC_APB2ENR
-	LDR R0, [R6]
-	ORR R0, #0x1C
-	STR R0, [R6]
+	LDR R0, =RCC_APB2ENR
+	LDR R4, [R0]
+	ORR R4, #0x1C
+	STR R4, [R0]
 	
 	BX LR
 	ENDP		
 ;This routine enables the GPIO for the LEDs
 ;GPIO CRH Mode set for Leds on port A 9 - 12
 GPIO_init  PROC
-	
 	;LEDS
 	;stored in port A, HRL 9 - 12
 	;00 for general purpose output push-pull
 	;11 for output mode max speed 50 mhz
-	LDR R6, =GPIOA_CRH
-	LDR R0, [R6]
-	LDR R1, =0xFFF0000F
-	AND R0, R1
-	LDR R2, =0x33330
-	ADD R0, R0, R2
-	STR R0, [R6]
+	LDR R0, =GPIOA_CRH
+	LDR R3, [R0]
+	LDR R4, =0xFFF0000F
+	AND R3, R4
+	LDR R4, =0x33330
+	ADD R3, R3, R4
+	STR R4, [R0]
 	BX LR
 	ENDP
 
 ;;delays program using clock times/process clock counts
-
 	ALIGN
-
-
 	END

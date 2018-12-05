@@ -3,7 +3,8 @@
 ;;ENSE 352
 ;;Whack a Mole Term Project
 ;;; Directives
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;Notes: General registers used
 ;;R0  for storing and loading
 ;;R1  for buttons
 ;;R2 for Leds
@@ -11,16 +12,14 @@
 ;;R12 for score
 ;;R11 for count
 ;;R10 for comparisons
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
             PRESERVE8
             THUMB       		 
 ;;; Equates
-
 INITIAL_MSP	EQU		0x20001000	; Initial Main Stack Pointer Value
-
 
 ;The onboard LEDS are on port C bits 8 and 9
 ;PORT C GPIO - Base Addr: 0x40011000
-
 GPIOA_CRL	EQU		0x40010800	; (0x00) Port Configuration Register for PA7 -> PA0
 GPIOB_CRL	EQU		0x40010C00	; (0x00) Port Configuration Register For PB7 -> PB0
 GPIOC_CRL	EQU		0x40011000	; (0x00) Port Configuration Register for PC7 -> PC0
@@ -29,21 +28,19 @@ GPIOA_IDR	EQU		0x40010808	; (0x00) Port Input Register for PA
 GPIOB_IDR	EQU		0x40010C08	; (0x00) Port Input Register for PB
 GPIOC_IDR	EQU		0x40011008	; (0x00) Port Input Register for PC
 GPIOA_ODR	EQU		0x4001080C	; (0x00) Port Output Register for PA	
-	
 RCC_APB2ENR	EQU		0x40021018	; APB2 Peripheral Clock Enable Register
-
 
 ; Times for delay routines
 DELAYTIME	EQU	450000
 WINDELAY	EQU 200000
 PRELIMDELAY EQU 800000
 CHECKDELAY  EQU 2500000
-CYCLES 		EQU 0x10
+; Cycles taken to win
+CYCLES 		EQU 16
 	
 ; Constants for Random Number Generation
 AConstant 	EQU 	1664525
 CConstant	EQU 	1013904223
-MConstant	EQU 	0xFFFFFFFF
 ; Vector Table Mapped to Address 0 at Reset
             AREA    RESET, Data, READONLY
             EXPORT  __Vectors
@@ -56,12 +53,10 @@ __Vectors	DCD		INITIAL_MSP			; stack pointer value when stack is empty
 			ENTRY
 
 Reset_Handler		PROC
-
 	BL GPIO_ClockInit
 	;LDR R8, =0x40033
 	BL GPIO_init
 	BL mainLoop
-	
 	ENDP
 
 mainLoop PROC
@@ -89,22 +84,22 @@ gameLoop PROC
 ;; Require:
 ;; 		None
 ;; Note: following registers are changed 
-;; R1, used for getting cycles of winning pattern
+;; R4, used for getting cycles of winning pattern
 ;; R10 used for led to display 
 ;; R6 used for LED GPIOA_IDR
 ;; R0 used for displaying sepecific LED
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;			
 winner	PROC
-	MOV R1, #0
+	MOV R4, #0
 	MOV R10, #0
-	LDR R6, =GPIOA_ODR
+	LDR R0, =GPIOA_ODR
 	MOV R3, #0xF
 	LSL R3, #9
-	STR R3, [R6]
+	STR R3, [R0]
 winnerInner
 	BL winnerDelay
 ;;allows for cycle back and forth
-	ADD R1, #1
+	ADD R4, #1
 	CMP R10, #0
 	BEQ cycleLed1
 	CMP R10, #1
@@ -124,23 +119,23 @@ winnerInner
 	
 ;;sets an LED value
 cycleLed1
-	MOV R0, #0xE
+	MOV R3, #0xE
 	B ledLight
 cycleLed2
-	MOV R0, #0xD
+	MOV R3, #0xD
 	B ledLight
 cycleLed3
-	MOV R0, #0xB
+	MOV R3, #0xB
 	B ledLight
 cycleLed4
-	MOV R0, #0x7
+	MOV R3, #0x7
 	B ledLight
 	
 ;;turns on the proper LED	
 ledLight
-	LDR R6, =GPIOA_ODR
-	LSL R0, #9
-	STR R0, [R6]
+	LDR R0, =GPIOA_ODR
+	LSL R3, #9
+	STR R3, [R0]
 	ADD R10, R10, #1
 	CMP R10, #7
 	BEQ reset10
@@ -150,9 +145,8 @@ reset10
 	MOV R10, #0
 continueWin	
 ;;once win loop is complete, start program over again
-	CMP R1, #0xF
+	CMP R4, #0xF
 	BEQ mainLoop
-	
 	B winnerInner
 	ENDP
 		
@@ -167,13 +161,10 @@ continueWin
 winnerDelay PROC
 	push {LR}
 	LDR R11, =WINDELAY
-	
 winDelayInner
 	SUB R11, R11, #1
 	CMP R11, #0
-	
 	BNE winDelayInner
-	
 	pop {LR}
 	BX LR
 	ENDP
@@ -184,7 +175,8 @@ winDelayInner
 ;;		alternates a solid on and solid off signal
 ;; Promise
 ;;		R11 will hold the value remaining in timer when loop is exited on user input
-;;		R1 - R4 hold button input, 1 for none, 0 for input
+;;		R1 will hold user input, if any button is presed, result will not be 0xF
+;;		R3 holds LED value to display
 ;; Require
 ;;		R11 constant DELAYTIME must be greater than or equal to 0 (larger shows longer)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -204,13 +196,11 @@ waitForUser PROC
 	MOV R11, #0
 	MOV R12, #0
 waitInner
-	
 	BL delay200ms
 	CMP R10, #0
 	BEQ led1
 	CMP R10, #1
 	BEQ led2
-	
 led1
 	LDR R0, =GPIOA_ODR
 	MOV R3, #0xF
@@ -218,7 +208,6 @@ led1
 	STR R3, [R0]
 	MOV R10, #1
 	B check
-
 led2
 	LDR R0, =GPIOA_ODR
 	MOV R3, #0x0
@@ -226,14 +215,12 @@ led2
 	STR R3, [R0]
 	MOV R10, #0
 	B check
-
 check
 	CMP R1, #0xF
 	BEQ waitInner
 	pop {LR}
 	BX LR
 	ENDP
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; delay200ms
 ;;		delays for user's set time, takes button input each loop
@@ -260,63 +247,53 @@ delay200ms PROC
 ;;reduces R11, constantly polls buttons
 delayInner
 	SUB R11, R11, #1
-	
-	;;button4
+	;;button4, loads button, shifts it so button is in bit 0, ands with 1 to clear rest of register
 	LDR R0, =GPIOA_IDR
 	LDR R3, [R0]
 	LSR R3, R3, #5
 	AND R3, R3, #1
-	
+;;moves bit from button 4 into R1, similar to all other buttons
 	MOV R1, R3
 	LSL R1, #1
-	
 	;;button3
 	LDR R0, =GPIOC_IDR
 	LDR R3, [R0]
 	LSR R3, R3, #12
 	AND R3, #1
-	
 	ADD R1, R1, R3
 	LSL R1, #2
-	
 	;;button 1 &2
 	LDR R0, =GPIOB_IDR
 	LDR R3, [R0]
 	LSR R3, R3, #8
 	AND R3, #3
-	
-	ADD R1, R1, R3
-	
-	
+	;;R3 stores all button inputs into bits 0-3 
+	ADD R1, R1, R3	
 	CMP R1, #0xF
-	BNE checkButton
-	
+	BNE continue
 	CMP R11, #0
 	BNE delayInner
+continue
 	pop {LR}
 	BX LR
-	ENDP
- 
+	ENDP 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; PrelimWait
 ;; 		delays by PRELIMDELAY set at top of file
 ;; WARN:
-;;		R1, will be 0 at end of the loop
+;;		R3, will be 0 at end of the loop
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 PrelimWait PROC
 	push {LR}
 	LDR R3, =PRELIMDELAY
-	
 	LDR R0, =GPIOA_ODR
 	MOV R4, #0xF
 	LSL R4, #9
 	STR R4, [R0]
-	
 prelimInner
 	SUB R3, R3, #1
 	CMP R3, #0
-	BNE prelimInner
-	
+	BNE prelimInner	
 	pop {LR}
 	BX LR
 	ENDP
@@ -332,7 +309,7 @@ prelimInner
 ;;		None
 ;; PROMISE:
 ;;		RO will contain random number
-;;		R8, R9, will be set to AConstant and CConstant
+;;		R0, R1, will be set to AConstant and CConstant
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 randomLED PROC
 	LDR R0, =AConstant
@@ -350,29 +327,23 @@ randomLED PROC
 	CMP R0, #2
 	BEQ LED3
 	CMP R0, #3
-	BEQ LED4
-	
+	BEQ LED4	
 LED1
 	MOV R1, #7
 	B continueLED
-
 LED2
 	MOV R1, #0xB
-	B continueLED
-	
+	B continueLED	
 LED3
 	MOV R1, #0xD
-	B continueLED
-	
+	B continueLED	
 LED4
 	MOV R1, #0xE
-	B continueLED
-	
+	B continueLED	
 continueLED
 	LDR R0, =GPIOA_ODR
 	LSL R1, R1, #9
-	STR R1, [R0]
-	
+	STR R1, [R0]	
 	BX LR
 	ENDP
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -380,11 +351,10 @@ continueLED
 ;;		based on LED that is on, button pattern is checked for match
 ;;		game enters fail stat if buttons and LEDs dont match
 ;;	REQUIRE:
-;;		R5 contains button inputs
+;;		R1 contains button inputs
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 checkLED PROC
-	push {LR}
-	
+	push {LR}	
 	LDR R0, =GPIOA_ODR
 	LDR R0, [R0]
 	LSR R0, R0, #9
@@ -405,38 +375,23 @@ checkLED PROC
 checkBtn1
 	CMP R1, #0xE
 	BEQ validLed
-	B gameEnd
-	
+	B gameEnd	
 checkBtn2
 	CMP R1, #0xD
 	BEQ validLed
-	B gameEnd
-	
+	B gameEnd	
 checkBtn3
 	CMP R1, #0xB
 	BEQ validLed
-	B gameEnd
-	
+	B gameEnd	
 checkBtn4
 	CMP R1, #0x7
 	BEQ validLed
 	B gameEnd
 ;;increment score
 validLed
-	ADD R12, R12, #1
-	
+	ADD R12, R12, #1	
 	pop {LR}
-	BX LR
-	ENDP
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;	checkButton
-;;		if no button is pressed, patern will be 1111 or 0xF
-;;			therefore enter fail state
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-	
-checkButton PROC
-	CMP R5, #0xF
-	BEQ gameEnd
 	BX LR
 	ENDP
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -455,12 +410,10 @@ gameEnd PROC
 checkWait PROC
 	push {LR}
 	LDR R0, =CHECKDELAY
-	
 checkWaitInner
 	SUB R0, R0, #1
 	CMP R0, #0
 	BNE checkWaitInner
-	
 	pop {LR}
 	BX LR
 	ENDP
@@ -469,21 +422,20 @@ checkWaitInner
 ;;		alternates between user Score and outer leds on
 ;;		allows for score of zero to be displayable
 ;;		cycles 3 times, display 6 times total
+;; R10 used for Compare, R0 for loading register, R3 for LEDs, R4 for counter
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 displayLose PROC
 	push {LR}
 	MOV R10, #0
 	MOV R4, #0
 	MOV R0, #0
-	LDR R6, =GPIOA_ODR
-	STR R0, [R6]
+	LDR R0, =GPIOA_ODR
+	STR R4, [R0]
 loseInner
 	CMP R10, #0
 	BEQ lightOuter
 	CMP R10, #1
 	BEQ lightScore
-
 lightOuter
 	MOV R3, #0x6
 	MOV R10, #1
@@ -494,7 +446,6 @@ lightScore
 	EOR R3, R3, #0xF
 	MOV R10, #0
 	B displayLED
-	
 displayLED
 	ADD R4, R4, #1
 	LSL R3, R3, #9
@@ -505,12 +456,10 @@ displayLED
 	BNE loseInner
 	pop {LR}
 	BX LR
-	ENDP
-		
+	ENDP		
 ;This routine will enable the clock for the Ports that you need	
 ;gets the address of the clock and turns it on for the ports 
 ;address 0x40021018 turning on 00011100 ports A, B and C
-	ALIGN
 GPIO_ClockInit PROC
 
 	LDR R6, =RCC_APB2ENR
@@ -519,10 +468,7 @@ GPIO_ClockInit PROC
 	STR R0, [R6]
 	
 	BX LR
-	ENDP
-		
-	ALIGN
-		
+	ENDP		
 ;This routine enables the GPIO for the LEDs
 ;GPIO CRH Mode set for Leds on port A 9 - 12
 GPIO_init  PROC

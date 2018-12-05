@@ -3,6 +3,14 @@
 ;;ENSE 352
 ;;Whack a Mole Term Project
 ;;; Directives
+
+;;R0  for storing and loading
+;;R1  for buttons
+;;R2 for Leds
+;;R3 for functions
+;;R12 for score
+;;R11 for count
+;;R10 for comparisons
             PRESERVE8
             THUMB       		 
 ;;; Equates
@@ -205,20 +213,18 @@ waitInner
 	BEQ led2
 	
 led1
-	LDR R6, =GPIOA_ODR
-	LDR R0, [R6]
+	LDR R0, =GPIOA_ODR
 	MOV R3, #0xF
 	LSL R3, #9
-	STR R3, [R6]
+	STR R3, [R0]
 	MOV R10, #1
 	B check
 
 led2
-	LDR R6, =GPIOA_ODR
-	LDR R0, [R6]
+	LDR R0, =GPIOA_ODR
 	MOV R3, #0x0
 	LSL R3, #9
-	STR R3, [R6]
+	STR R3, [R0]
 	MOV R10, #0
 	B check
 

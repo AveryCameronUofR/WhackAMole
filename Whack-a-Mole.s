@@ -37,7 +37,7 @@ PRELIMDELAY EQU 800000
 CHECKDELAY  EQU 2500000
 PROFDELAY	EQU 10500000
 ; Cycles taken to win
-CYCLES 		EQU 4
+CYCLES 		EQU 16
 	
 ; Constants for Random Number Generation
 AConstant 	EQU 	1664525
@@ -65,6 +65,7 @@ mainLoop PROC
 		ENDP
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Use Case 3: Normal Game Play
+;; Requires: None
 ;; random Led loaded, user has to react before timer expires (if true loop, if false Use Case 5: Failure)
 ;; loads cycles into R1
 ;; Branches to winner when score in R12 equals CYCLES
@@ -168,10 +169,13 @@ continueWin
 ;; delays for approx 1 minute using a loop, can be exited by user input similar to waitForPlayer
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	
 displayProf PROC
+;;clears leds
 	LDR R0, =GPIOA_ODR
 	MOV R2, #0xF
 	LSL R2, R2, #9
 	STR R2, [R0]
+	
+;;Checks the proficiency level
 	CMP R10, #9
 	BEQ prof90
 	CMP R10, #8
@@ -192,6 +196,7 @@ displayProf PROC
 	BEQ prof10
 	CMP R10, #0
 	BEQ prof00
+;;moves 9 in binary to leds etc based on proficiency 
 prof90
 	MOV R2, #0x6
 	LSL R2, R2, #9
@@ -232,6 +237,7 @@ prof00
 	MOV R2, #0xF
 	LSL R2, R2, #9
 	B profInner
+;;stores led value to value in R0, delays 1 minute continues back to main loop
 profInner
 	MOV R7, #1
 	LDR R0, =GPIOA_ODR
@@ -242,6 +248,7 @@ profInner
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; winnerDelay
 ;;  	takes WINDELAY constant and subtracts 1 to create a delay timer
+;; Require: None
 ;; PROMISE:
 ;;		R11 will be 0
 ;; 		Program will exit back to proper location afterward
@@ -271,6 +278,7 @@ winDelayInner
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 waitForUser PROC
 	push {LR}
+;;sets all registers to 0
 	MOV R0, #0
 	MOV R1, #0
 	MOV R2, #0
@@ -284,6 +292,7 @@ waitForUser PROC
 	MOV R10, #0
 	MOV R11, #0
 	MOV R12, #0
+;;cycles back betweeen all on and all off
 waitInner
 	BL delay200ms
 	CMP R9, #0
@@ -329,10 +338,11 @@ delay200ms PROC
 	MUL R0, R0, R12
 	SUB R11, R11, R0
 	ADD R8, R8, R11
-
+;R7 is set to 1 if displaying profiecency 
 	CMP R7, #0
 	BEQ ignoreProfWaitTime
 	LDR R11, =PROFDELAY
+;resets calues used in delay reduction calculation
 ignoreProfWaitTime
 	MOV R1, #0
 	MOV R0, #0
@@ -373,6 +383,7 @@ continue
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; PrelimWait
 ;; 		delays by PRELIMDELAY set at top of file
+;; Requires: None
 ;; WARN:
 ;;		R3, will be 0 at end of the loop
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -406,10 +417,12 @@ prelimInner
 ;;		R0, R1, will be set to AConstant and CConstant
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 randomLED PROC
+;;calculates random number R0 * R11 + R1 = a*x +C
 	LDR R0, =AConstant
 	LDR R1, =CConstant
 	MUL R0, R0, R11
 	ADD R0, R0, R1
+;;takes the first 2 bits 
 	AND R0, R0, #3
 	CMP R0, #0
 	BEQ LED1
@@ -464,6 +477,7 @@ checkLED PROC
 	CMP R0, #0x7
 	BEQ checkBtn4
 	B gameEnd
+;;compare buttons vs led displayed
 checkBtn1
 	CMP R1, #0xE
 	BEQ validLed
@@ -526,11 +540,34 @@ displayLose PROC
 	MOV R0, #0
 	LDR R0, =GPIOA_ODR
 	STR R4, [R0]
+;Moves score to R4 for bit manipulation to display score in binary to LEDs
+	MOV R4, R12
+	MOV R12, #0
+;puts bit 3 in bit 0	
+	LSR R5, R4, #3
+	AND R5, R5, #1
+	ORR R12, R12, R5
+;puts bit 2 in bit 1		
+	LSR R5, R4, #1
+	AND R5, R5, #2
+	ORR R12, R12, R5
+;puts bit 1 in bit 2	
+	LSL R5, R4, #1
+	AND R5, R5, #4
+	ORR R12, R12, R5
+;puts bit 0 in bit 3	
+	LSL R5, R4, #3
+	AND R5, R5, #8
+	ORR R12, R12, R5
+;;inverts values for active low LEDs
+	EOR R12, R12, #0xF
+	MOV R4, #0
 loseInner
 	CMP R9, #0
 	BEQ lightOuter
 	CMP R9, #1
 	BEQ lightScore
+;lights the outer 2 leds for differentiation from a 0 score
 lightOuter
 	MOV R3, #0x6
 	MOV R9, #1
@@ -538,7 +575,7 @@ lightOuter
 lightScore
 	MOV R3, R12
 	;ADD R0, R12, #1
-	EOR R3, R3, #0xF
+	;EOR R3, R3, #0xF
 	MOV R9, #0
 	B displayLED
 displayLED
